@@ -2,33 +2,13 @@ import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import isEmpty from 'lodash/isEmpty'
 import withRoot from '../components/withRoot'
-import classNames from 'classnames'
 import { withStyles } from 'material-ui/styles'
-import AppBar from 'material-ui/AppBar'
-import Toolbar from 'material-ui/Toolbar'
-import Typography from 'material-ui/Typography'
-import Button from 'material-ui/Button'
-import Dialog, {
-  DialogTitle,
-  DialogContent,
-  DialogActions
-} from 'material-ui/Dialog'
-import AddIcon from 'material-ui-icons/Add'
-import TextField from 'material-ui/TextField'
-import Radio, { RadioGroup } from 'material-ui/Radio'
-import { FormControlLabel } from 'material-ui/Form'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip
-} from 'recharts'
 import { initializeApp, firestore, auth } from 'firebase'
 import 'firebase/firestore'
 import moment from 'moment'
+import Header from '../components/Header'
+import Chart from '../components/Chart'
+import AddDialog from '../components/AddDialog'
 
 const config = {
   apiKey: 'AIzaSyC4dR0mZ6eZ1aVs1EG4lPt22gcbS3QL_Rg',
@@ -45,71 +25,53 @@ const styles = {
     flexDirection: 'column',
     height: '100vh'
   },
-  flex: {
-    flex: 1,
-  },
-  content: {
+  chart: {
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center'
-  },
-  floatingButton: {
-    margin: 0,
-    top: 'auto',
-    right: 20,
-    bottom: 20,
-    left: 'auto',
-    position: 'fixed'
-  },
-  radioButtons: {
-    flexDirection: 'row'
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column'
+    alignItems: 'center',
+    flex: 1
   }
 }
-
-const getDefaultState = () => ({
-  value: 0,
-  type: 'morning',
-  date: moment().format('YYYY-MM-DD')
-})
-
-let db
 
 class Index extends Component {
   state = {
     ui: {
       openAddDialog: false,
-      loading: true
+      loadingUser: true,
+      loadingData: false
     },
     user: {},
-    entries: [],
-    form: getDefaultState()
+    entries: []
+  }
+
+  constructor () {
+    super()
+
+    initializeApp(config)
+    this.db = firestore()
   }
 
   componentDidMount () {
-    initializeApp(config)
-
     auth().languageCode = 'ru'
     auth().onAuthStateChanged(async (user) => {
-      const { state } = this
+      const { state, db } = this
 
       if (!isEmpty(user)) {
         this.setState({
           user: {
-            ...state.user,
             name: user.displayName,
             uid: user.uid
+          },
+          ui: {
+            ...state.ui,
+            loadingUser: false,
+            loadingData: true
           }
         })
 
-        db = firestore()
         let entries = []
-        const docs = await db.collection(`users/${user.uid}/entries`)
-          .orderBy('date')
-          .get()
+        const docs = await db.collection(`users/${user.uid}/entries`).orderBy('date').get()
+        console.log(docs)
         docs.forEach(doc => {
           const data = doc.data()
 
@@ -122,45 +84,27 @@ class Index extends Component {
           ]
         })
 
-        this.setState({
-          entries
-        })
+        this.setState((prevState) => ({
+          entries,
+          ui: {
+            ...prevState.ui,
+            loadingData: false
+          }
+        }))
+
+        return
       }
 
       this.setState({
         ui: {
           ...state.ui,
-          loading: false
+          loadingUser: false
         }
       })
     })
   }
 
-  showAddDialog = () => {
-    const { state } = this
-
-    this.setState({
-      ui: {
-        ...state.ui,
-        openAddDialog: true
-      }
-    })
-  }
-
-  hideAddDialog = () => {
-    const { state } = this
-
-    this.setState({
-      ui: {
-        ...state.ui,
-        openAddDialog: false
-      }
-    })
-  }
-
-  authenticate = async () => {
-    const { state } = this
-
+  login = async () => {
     try {
       await auth().setPersistence(auth.Auth.Persistence.LOCAL)
 
@@ -169,164 +113,92 @@ class Index extends Component {
 
       this.setState({
         user: {
-          ...state.user,
           name: user.displayName,
           uid: user.uid
         }
       })
     } catch (e) {
-      console.warn(e)
+      console.info(e)
     }
   }
 
-  addEntry = async (e) => {
-    e.preventDefault()
+  logout = async () => {
+    try {
+      await auth().signOut()
 
-    const {
-      form,
-      user,
-      entries,
-      ui
-    } = this.state
-    const date = (function (d, t) {
-      switch (t) {
-        case 'morning':
-          return `${d}T10:00`
-        case 'dinner':
-          return `${d}T14:00`
-        default:
-          return `${d}T18:00`
+      this.setState({
+        user: {},
+        entries: []
+      })
+    } catch (e) {
+      console.info(e)
+    }
+  }
+
+  addEntry = async (entry) => {
+    const { state } = this
+
+    this.setState({
+      ui: {
+        ...state.ui,
+        loadingData: true
       }
-    }(form.date, form.type))
+    })
 
     try {
-      let entry = {
-        value: form.value,
-        date: date
-      }
-
-      const docDef = await db.collection(`users/${user.uid}/entries`).add(entry)
+      const docDef = await this.db.collection(`users/${state.user.uid}/entries`).add(entry)
 
       entry = Object.assign({}, entry, {
         id: docDef.id
       })
 
-      this.setState({
-        form: getDefaultState(),
+      this.setState((prevState) => ({
         entries: [
-          ...entries,
+          ...prevState.entries,
           entry
-        ],
-        ui: {
-          ...ui,
-          openAddDialog: false
-        }
-      })
+        ]
+      }))
     } catch (e) {
       console.warn(e)
     }
-  }
 
-  onInputChange = (name) => (e) => {
-    const { state } = this
-    let { value } = e.target
-
-    if (name === 'value') {
-      value = parseFloat(value)
-    }
-
-    this.setState({
-      form: {
-        ...state.form,
-        [name]: value
+    this.setState((prevState) => ({
+      ui: {
+        ...prevState.ui,
+        loadingData: false
       }
-    })
+    }))
   }
 
   render () {
     const { classes } = this.props
-    const { openAddDialog: open } = this.state.ui
-    const { user, form, entries } = this.state
-    const authorized = !isEmpty(user)
-    const data = isEmpty(entries)
+    const { state } = this
+    const data = isEmpty(state.entries)
       ? []
-      : entries.map(entry => ({
+      : state.entries.map(entry => ({
         ...entry,
         date: moment(entry.date).format('DD.MM')
       }))
 
-    const HeaderButton = authorized
-      ? <Button color="contrast" onClick={() => console.log('user auth')}>{user.name}</Button>
-      : <Button color="contrast" onClick={this.authenticate}>Авторизация</Button>
-    const AddButton = authorized
-      ? <Button fab color="accent" className={classes.floatingButton} onClick={this.showAddDialog}>
-        <AddIcon/>
-      </Button>
-      : null
-
     return (
       <div className={classes.root}>
-        <Dialog open={open}>
-          <DialogTitle>
-            Добавить запись
-          </DialogTitle>
-          <DialogContent>
-            <form className={classes.form}>
-              <TextField
-                label="Дата"
-                margin="normal"
-                type="date"
-                value={form.date}
-                onChange={this.onInputChange('date')}
-              />
-              <TextField
-                label="Значение"
-                margin="normal"
-                type="number"
-                step="any"
-                min="0"
-                value={form.value}
-                onChange={this.onInputChange('value')}
-              />
-              <RadioGroup className={classes.radioButtons} name="type" value={form.type} onChange={this.onInputChange('type')}>
-                <FormControlLabel value="morning" control={<Radio/>} label="Утро"/>
-                <FormControlLabel value="dinner" control={<Radio/>} label="День"/>
-                <FormControlLabel value="evening" control={<Radio/>} label="Вечер"/>
-              </RadioGroup>
-            </form>
-          </DialogContent>
-          <DialogActions>
-            <Button color="primary" onClick={this.hideAddDialog}>Закрыть</Button>
-            <Button color="primary" onClick={this.addEntry} >Добавить</Button>
-          </DialogActions>
-        </Dialog>
-        <AppBar position="static">
-          <Toolbar>
-            <Typography type="title" color="inherit" className={classes.flex}>
-              Дневник астмы
-            </Typography>
-            {HeaderButton}
-          </Toolbar>
-        </AppBar>
-        <div className={classNames(classes.flex, classes.content)}>
-          <ResponsiveContainer width="95%" height="95%">
-            <LineChart data={data}>
-              <XAxis dataKey="date"/>
-              <YAxis/>
-              <Tooltip/>
-              <CartesianGrid strokeDasharray="3 3"/>
-              <Line dataKey="value" type="monotone" stroke="#8884d8"/>
-            </LineChart>
-          </ResponsiveContainer>
+        <Header
+          loading={state.ui.loadingUser}
+          user={state.user}
+          login={this.login}
+          logout={this.logout}
+        />
+        <div className={classes.chart}>
+          <Chart data={data} loading={state.ui.loadingData}/>
         </div>
-        {AddButton}
+        <AddDialog user={state.user} addEntry={this.addEntry}/>
       </div>
     )
   }
 }
 
 Index.propTypes = {
-  classes: PropTypes.object.isRequired,
+  classes: PropTypes.object.isRequired
 }
 
 export default withRoot(withStyles(styles)(Index))

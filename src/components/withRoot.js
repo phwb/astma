@@ -1,10 +1,10 @@
 /* eslint-disable flowtype/require-valid-file-annotation */
 
-import React, { Component } from 'react';
-import JssProvider from 'react-jss/lib/JssProvider';
-import { withStyles, MuiThemeProvider } from 'material-ui/styles';
-import wrapDisplayName from 'recompose/wrapDisplayName';
-import createContext from '../styles/createContext';
+import React, { Component } from 'react'
+import JssProvider from 'react-jss/lib/JssProvider'
+import { withStyles, MuiThemeProvider } from 'material-ui/styles'
+import wrapDisplayName from 'recompose/wrapDisplayName'
+import createContext from '../styles/createContext'
 
 // Apply some reset
 const styles = theme => ({
@@ -24,25 +24,25 @@ const styles = theme => ({
       fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif'
     }
   },
-});
+})
 
-let AppWrapper = props => props.children;
+let AppWrapper = props => props.children
 
-AppWrapper = withStyles(styles)(AppWrapper);
+AppWrapper = withStyles(styles)(AppWrapper)
 
-const context = createContext();
+const context = createContext()
 
-function withRoot(BaseComponent) {
+function withRoot (BaseComponent) {
   class WithRoot extends Component {
-    componentDidMount() {
+    componentDidMount () {
       // Remove the server-side injected CSS.
-      const jssStyles = document.querySelector('#jss-server-side');
+      const jssStyles = document.querySelector('#jss-server-side')
       if (jssStyles && jssStyles.parentNode) {
-        jssStyles.parentNode.removeChild(jssStyles);
+        jssStyles.parentNode.removeChild(jssStyles)
       }
     }
 
-    render() {
+    render () {
       return (
         <JssProvider registry={context.sheetsRegistry} jss={context.jss}>
           <MuiThemeProvider theme={context.theme} sheetsManager={context.sheetsManager}>
@@ -51,15 +51,15 @@ function withRoot(BaseComponent) {
             </AppWrapper>
           </MuiThemeProvider>
         </JssProvider>
-      );
+      )
     }
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    WithRoot.displayName = wrapDisplayName(BaseComponent, 'withRoot');
+    WithRoot.displayName = wrapDisplayName(BaseComponent, 'withRoot')
   }
 
-  return WithRoot;
+  return WithRoot
 }
 
-export default withRoot;
+export default withRoot
